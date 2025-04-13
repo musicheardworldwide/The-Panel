@@ -1,0 +1,120 @@
+/* Main Styles for The Panel */
+
+/* Sidebar Styles */
+#sidebar {
+    min-height: 100vh;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Status Indicator */
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 50%;
+}
+
+.bg-online {
+    background-color: #28a745 !important;
+}
+
+.bg-offline {
+    background-color: #dc3545 !important;
+}
+
+/* Chat Container */
+.chat-container {
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    height: calc(100vh - 220px);
+    overflow-y: auto;
+    padding: 15px;
+    background-color: #f8f9fa;
+}
+
+/* Message Styles */
+.message {
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    border-radius: 10px;
+    max-width: 80%;
+}
+
+.user-message {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    margin-left: auto;
+    border-top-right-radius: 0;
+}
+
+.bot-message {
+    background-color: #f8f9fa;
+    color: #212529;
+    margin-right: auto;
+    border-top-left-radius: 0;
+    border: 1px solid #dee2e6;
+}
+
+.system-message {
+    background-color: #fff3cd;
+    color: #856404;
+    width: 100%;
+    text-align: center;
+}
+
+/* Code Block Styling */
+pre {
+    background-color: #212529;
+    color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: static;
+        height: auto;
+    }
+    .chat-container {
+        height: calc(100vh - 300px);
+    }
+}
+
+/* Input Area */
+#user-input {
+    resize: none;
+}
+
+/* Button Styling */
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.btn-primary:hover {
+    background-color: #0069d9;
+    border-color: #0062cc;
+}
+
+/* Model Info Panel */
+.model-info {
+    font-size: 0.8rem;
+}
