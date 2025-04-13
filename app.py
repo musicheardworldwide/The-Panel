@@ -1,16 +1,18 @@
 """
 The Panel - A Flask-based server for Open Interpreter integration.
 
-This module provides an API to interact with LLM models via Open Interpreter.
+This module provides an API and web interface to interact with LLM models via Open Interpreter.
 """
 
 from flask import Flask, request, jsonify, send_from_directory
 from interpreter import interpreter
 import json
 import os
-from typing import Dict, Any, Generator, Union
+from typing import Dict, Any, Generator, Union, List
 import logging
 from config import Config
+import providers
+from tools import ToolManager, GitHubToolFinder
 
 # Set up logging
 logging.basicConfig(
@@ -22,28 +24,30 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
 
+# Initialize tool manager
+tool_manager = ToolManager()
+
 def configure_interpreter() -> None:
     """Configure Open Interpreter with settings from config."""
     config = Config.get_model_config()
+    provider_id = config.get("provider", "openai")
     
-    if config.get("offline", False):
-        # Local Model
-        interpreter.offline = True
-        interpreter.llm.model = config.get("model", "ollama/llama3.1")
-        interpreter.llm.api_base = config.get("api_base", "http://localhost:11434")
-        interpreter.llm.context_window = config.get("context_window", 4000)
-        interpreter.llm.max_tokens = config.get("max_tokens", 3000)
-    else:
-        # Hosted Model
-        interpreter.offline = False
-        interpreter.llm.model = config.get("model", "gpt-4o")
-        interpreter.llm.context_window = config.get("context_window", 10000)
-        interpreter.llm.max_tokens = config.get("max_tokens", 4096)
-    
-    interpreter.auto_run = True
-    interpreter.verbose = config.get("verbose", False)
-    
-    logger.info(f"Configured Interpreter with model: {interpreter.llm.model}, offline: {interpreter.offline}")
+    try:
+        # Get the appropriate provider
+        provider_instance = providers.get_provider(provider_id)
+        
+        # Use the provider to configure the interpreter
+        provider_instance.configure_interpreter(interpreter, config)
+        
+        logger.info(f"Configured Interpreter with provider: {provider_id}, model: {interpreter.llm.model}")
+        
+    except Exception as e:
+        logger.error(f"Error configuring interpreter: {str(e)}")
+        # Fall back to OpenAI if there's an error
+        if provider_id != "openai":
+            logger.info("Falling back to OpenAI provider")
+            providers.get_provider("openai").configure_interpreter(
+                interpreter, Config._get_openai_config())
 
 # Configure interpreter on startup
 configure_interpreter()
@@ -114,7 +118,8 @@ def health_check() -> Dict[str, Union[str, bool]]:
     return jsonify({
         "status": "healthy",
         "model": interpreter.llm.model,
-        "offline": interpreter.offline
+        "offline": interpreter.offline,
+        "provider": Config.get_model_config().get("provider", "openai")
     })
 
 @app.route('/config', methods=['GET'])
@@ -131,8 +136,145 @@ def get_config() -> Dict[str, Any]:
         "context_window": interpreter.llm.context_window,
         "max_tokens": interpreter.llm.max_tokens,
         "auto_run": interpreter.auto_run,
-        "verbose": interpreter.verbose
+        "verbose": interpreter.verbose,
+        "provider": Config.get_model_config().get("provider", "openai")
     })
+
+@app.route('/providers', methods=['GET'])
+def list_providers() -> Dict[str, List[Dict[str, str]]]:
+    """
+    Get a list of available providers.
+    
+    Returns:
+        JSON response with provider information
+    """
+    return jsonify({
+        "providers": Config.get_providers()
+    })
+
+@app.route('/models', methods=['GET'])
+def list_models() -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Get a list of available models for the current or specified provider.
+    
+    Returns:
+        JSON response with model information
+    """
+    provider_id = request.args.get('provider', 
+                                 Config.get_model_config().get("provider", "openai"))
+    
+    try:
+        provider_instance = providers.get_provider(provider_id)
+        models = provider_instance.list_models()
+        return jsonify({"models": models})
+    except Exception as e:
+        logger.error(f"Error listing models for provider {provider_id}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/tools', methods=['GET'])
+def list_tools() -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Get a list of available tools.
+    
+    Returns:
+        JSON response with tool information
+    """
+    return jsonify({
+        "tools": tool_manager.get_tool_functions(),
+        "mcp_servers": tool_manager.get_mcp_server_info()
+    })
+
+@app.route('/tools/search', methods=['GET'])
+def search_tools() -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Search for tools on GitHub.
+    
+    Returns:
+        JSON response with search results
+    """
+    query = request.args.get('query', '')
+    tool_type = request.args.get('type', None)
+    
+    tool_types = [tool_type] if tool_type else None
+    
+    github_finder = GitHubToolFinder()
+    results = github_finder.search_repositories(query, tool_types)
+    
+    return jsonify({
+        "results": results
+    })
+
+@app.route('/tools/add', methods=['POST'])
+def add_tool() -> Dict[str, Any]:
+    """
+    Add a tool from GitHub.
+    
+    Returns:
+        JSON response with the result of the operation
+    """
+    data = request.json
+    repo_url = data.get('repo_url')
+    
+    if not repo_url:
+        return jsonify({"error": "No repository URL provided"}), 400
+    
+    try:
+        tool_info = tool_manager.add_tool_from_github(repo_url)
+        return jsonify({
+            "success": True,
+            "tool": {
+                "name": tool_info["name"],
+                "description": tool_info["description"],
+                "version": tool_info["version"],
+                "functions": list(tool_info["functions"].keys())
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error adding tool from {repo_url}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_provider', methods=['POST'])
+def update_provider() -> Dict[str, Any]:
+    """
+    Update the active provider and model.
+    
+    Returns:
+        JSON response with the result of the operation
+    """
+    data = request.json
+    provider_id = data.get('provider')
+    model_id = data.get('model')
+    
+    if not provider_id:
+        return jsonify({"error": "No provider specified"}), 400
+    
+    try:
+        # Update environment variables
+        os.environ["PROVIDER"] = provider_id
+        
+        if model_id:
+            if provider_id == Config.PROVIDER_OPENAI:
+                os.environ["OPENAI_MODEL"] = model_id
+            elif provider_id == Config.PROVIDER_OLLAMA:
+                os.environ["OLLAMA_MODEL"] = model_id
+            elif provider_id == Config.PROVIDER_DEEPSEEK:
+                os.environ["DEEPSEEK_MODEL"] = model_id
+            elif provider_id == Config.PROVIDER_MHW:
+                os.environ["MHW_MODEL"] = model_id
+        
+        # Reconfigure the interpreter
+        configure_interpreter()
+        
+        return jsonify({
+            "success": True,
+            "config": {
+                "provider": provider_id,
+                "model": interpreter.llm.model
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error updating provider to {provider_id}: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     # Get Flask configuration from config
@@ -145,4 +287,4 @@ if __name__ == '__main__':
         debug=flask_config.get("debug", False)
     )
     
-    logger.info(f"Open Interpreter server is running on http://{flask_config.get('host', '0.0.0.0')}:{flask_config.get('port', 5001)}")
+    logger.info(f"Open Interpreter server is running on http://{flask_config.get('host', '0.0.0.0')}:{flask_config.get('port', 5001')}")
