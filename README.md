@@ -1,13 +1,18 @@
 # The Panel
 
-A Flask-based server for Open Interpreter integration, providing an API to interact with various LLM models.
+A Flask-based server for Open Interpreter integration, providing an API and web interface to interact with various LLM models.
+
+![The Panel Screenshot](https://via.placeholder.com/800x450.png?text=The+Panel+Web+Interface)
 
 ## Features
 
 - Simple REST API to send prompts to LLM models via Open Interpreter
+- Web-based chat interface for easy interaction
 - Support for both local and hosted LLM models
 - Streaming responses
 - Configurable model parameters
+- Chat history persistence
+- Markdown and code syntax highlighting support
 
 ## Installation
 
@@ -24,35 +29,44 @@ Install the required dependencies:
 pip install -r requirements.txt
 ```
 
+Or use the deployment script:
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
 ## Configuration
 
-The application can be configured to use either a local or hosted LLM model:
+The application can be configured to use either a local or hosted LLM model using environment variables. Copy the `.env.example` file to `.env` and customize the settings:
+
+```bash
+cp .env.example .env
+```
 
 ### Local Model Configuration
 
-To use a local model like Ollama, uncomment and adjust the local model configuration in `app.py`:
+To use a local model like Ollama, set the following in your `.env` file:
 
-```python
-# Local Model
-interpreter.offline = True
-interpreter.llm.model = "ollama/llama3.1"
-interpreter.llm.api_base = "http://localhost:11434"
-interpreter.llm.context_window = 4000
-interpreter.llm.max_tokens = 3000
-interpreter.auto_run = True
-interpreter.verbose = True
+```
+USE_LOCAL_MODEL=true
+LOCAL_MODEL_NAME=ollama/llama3.1
+LOCAL_API_BASE=http://localhost:11434
+LOCAL_CONTEXT_WINDOW=4000
+LOCAL_MAX_TOKENS=3000
+VERBOSE=true
 ```
 
 ### Hosted Model Configuration
 
 To use a hosted model like GPT-4o (default), use the following configuration:
 
-```python
-# Hosted Model
-interpreter.llm.model = "gpt-4o"
-interpreter.llm.context_window = 10000
-interpreter.llm.max_tokens = 4096
-interpreter.auto_run = True
+```
+USE_LOCAL_MODEL=false
+MODEL_NAME=gpt-4o
+CONTEXT_WINDOW=10000
+MAX_TOKENS=4096
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 ## Usage
@@ -64,6 +78,11 @@ python app.py
 ```
 
 The server will run on `http://0.0.0.0:5001`.
+
+### Web Interface
+
+Access the web interface by opening a browser and navigating to:
+- `http://localhost:5001`
 
 ### API Endpoints
 
@@ -87,6 +106,37 @@ Send a prompt to the LLM model.
 }
 ```
 
+#### `/health` (GET)
+
+Check the server health and model configuration.
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "model": "gpt-4o",
+  "offline": false
+}
+```
+
+#### `/config` (GET)
+
+Get the current model configuration.
+
+**Response:**
+
+```json
+{
+  "model": "gpt-4o",
+  "offline": false,
+  "context_window": 10000,
+  "max_tokens": 4096,
+  "auto_run": true,
+  "verbose": false
+}
+```
+
 ### Example with curl
 
 ```bash
@@ -95,23 +145,38 @@ curl -X POST http://localhost:5001/chat \
      -d '{"prompt": "Hello, how are you?"}'
 ```
 
-## Environment Variables
-
-For security, API keys and other sensitive information should be stored in a `.env` file:
-
-```
-OPENAI_API_KEY=your-api-key-here
-```
-
 ## Project Structure
 
 ```
 The-Panel/
-├── app.py               # Main application file
-├── config.py            # Configuration utilities
-├── .env                 # Environment variables (not tracked in git)
-├── requirements.txt     # Project dependencies
-└── README.md            # Project documentation
+├── app.py                # Main application file
+├── config.py             # Configuration utilities
+├── .env                  # Environment variables (not tracked in git)
+├── .env.example          # Example environment file
+├── deploy.sh             # Deployment script
+├── requirements.txt      # Project dependencies
+├── static/               # Web UI static files
+│   ├── index.html        # Main HTML page
+│   ├── css/              # CSS styles
+│   ├── js/               # JavaScript files
+│   └── favicon.ico       # Favicon
+├── tests/                # Test scripts
+│   └── test_server.py    # Server test utility
+└── README.md             # Project documentation
+```
+
+## Testing
+
+The repository includes a simple test script to verify the server is working correctly:
+
+```bash
+python -m tests.test_server --url http://localhost:5001 --prompt "Hello, how are you?"
+```
+
+To only check server health:
+
+```bash
+python -m tests.test_server --url http://localhost:5001 --health-only
 ```
 
 ## License
