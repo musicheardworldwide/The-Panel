@@ -4,9 +4,10 @@ The Panel - A Flask-based server for Open Interpreter integration.
 This module provides an API to interact with LLM models via Open Interpreter.
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from interpreter import interpreter
 import json
+import os
 from typing import Dict, Any, Generator, Union
 import logging
 from config import Config
@@ -19,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 
 def configure_interpreter() -> None:
     """Configure Open Interpreter with settings from config."""
@@ -46,6 +47,11 @@ def configure_interpreter() -> None:
 
 # Configure interpreter on startup
 configure_interpreter()
+
+@app.route('/')
+def index():
+    """Serve the main application page."""
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/chat', methods=['POST'])
 def chat() -> Dict[str, Any]:
@@ -98,7 +104,7 @@ def process_interpreter_response(response: Generator) -> Generator[str, None, No
                 yield chunk
 
 @app.route('/health', methods=['GET'])
-def health_check() -> Dict[str, str]:
+def health_check() -> Dict[str, Union[str, bool]]:
     """
     Health check endpoint to verify the server is running.
     
